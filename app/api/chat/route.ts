@@ -43,7 +43,7 @@ Step 2) Read the graph text (.txt) file ${additionalPrompts1} for the python cod
         ...messages,
       ],
       temperature: 0.7,
-      max_tokens: 1000,
+      max_tokens: 10000,
     });
 
     return NextResponse.json(response.choices[0].message);
