@@ -1,12 +1,132 @@
+// 'use client'
+
+// import { useState, useEffect } from 'react'
+// import { useTheme } from 'next-themes'
+// import { Moon, Sun } from 'lucide-react'
+
+// type Message = {
+//   role: 'user' | 'assistant'
+//   content: string
+// }
+
+// export default function ChatInterface() {
+//   const [messages, setMessages] = useState<Message[]>([])
+//   const [input, setInput] = useState('')
+//   const [isLoading, setIsLoading] = useState(false)
+//   const [mounted, setMounted] = useState(false)
+//   const { theme, setTheme } = useTheme()
+
+//   useEffect(() => {
+//     setMounted(true)
+//   }, [])
+
+//   const handleSubmit = async (e: React.FormEvent) => {
+//     e.preventDefault()
+//     if (!input.trim()) return
+
+//     const userMessage: Message = { role: 'user', content: input }
+//     setMessages((prev) => [...prev, userMessage])
+//     setInput('')
+//     setIsLoading(true)
+
+//     try {
+//       const response = await fetch('/api/chat', {
+//         method: 'POST',
+//         headers: {
+//           'Content-Type': 'application/json',
+//         },
+//         body: JSON.stringify({ messages: [...messages, userMessage] }),
+//       })
+
+//       if (!response.ok) {
+//         throw new Error('Failed to fetch response')
+//       }
+
+//       const data = await response.json()
+//       setMessages((prev) => [...prev, { role: 'assistant', content: data.content }])
+//     } catch (error) {
+//       console.error('Error:', error)
+//       setMessages((prev) => [
+//         ...prev,
+//         { role: 'assistant', content: 'An error occurred. Please try again.' },
+//       ])
+//     } finally {
+//       setIsLoading(false)
+//     }
+//   }
+
+//   if (!mounted) return null
+
+//   return (
+//     <div className="container mx-auto p-4">
+//       <div className="w-full max-w-2xl mx-auto bg-card text-card-foreground rounded-lg shadow-md">
+//         <div className="flex flex-row items-center justify-between p-4 border-b">
+//           <h1 className="text-xl font-bold">Business Model Canvas Chatbot</h1>
+//           <button
+//             className="p-2 rounded-full bg-secondary text-secondary-foreground"
+//             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+//           >
+//             {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+//             <span className="sr-only">Toggle theme</span>
+//           </button>
+//         </div>
+//         <div className="p-4 space-y-4 h-[60vh] overflow-y-auto">
+//           {messages.map((message, index) => (
+//             <div
+//               key={index}
+//               className={`p-2 rounded-lg ${
+//                 message.role === 'user'
+//                   ? 'bg-primary text-primary-foreground'
+//                   : 'bg-secondary text-secondary-foreground'
+//               }`}
+//             >
+//               <p className="font-semibold">{message.role === 'user' ? 'You:' : 'AI:'}</p>
+//               <p>{message.content}</p>
+//             </div>
+//           ))}
+//           {isLoading && (
+//             <div className="p-2 rounded-lg bg-secondary text-secondary-foreground">
+//               <p className="font-semibold">AI is thinking...</p>
+//             </div>
+//           )}
+//         </div>
+//         <div className="p-4 border-t">
+//           <form onSubmit={handleSubmit} className="flex space-x-2">
+//             <input
+//               type="text"
+//               value={input}
+//               onChange={(e) => setInput(e.target.value)}
+//               placeholder="Type your message..."
+//               className="flex-grow p-2 border rounded-md bg-background text-foreground"
+//             />
+//             <button
+//               type="submit"
+//               disabled={isLoading}
+//               className="px-4 py-2 bg-primary text-primary-foreground rounded-md disabled:opacity-50"
+//             >
+//               Send
+//             </button>
+//           </form>
+//         </div>
+//       </div>
+//     </div>
+//   )
+// }
+
 'use client'
 
 import { useState, useEffect } from 'react'
 import { useTheme } from 'next-themes'
-import { Moon, Sun } from 'lucide-react'
+import { Moon, Sun, MessageSquare, Save, Trash2 } from 'lucide-react'
 
 type Message = {
   role: 'user' | 'assistant'
   content: string
+}
+
+type SavedChat = {
+  id: string
+  name: string
 }
 
 export default function ChatInterface() {
@@ -15,10 +135,31 @@ export default function ChatInterface() {
   const [isLoading, setIsLoading] = useState(false)
   const [mounted, setMounted] = useState(false)
   const { theme, setTheme } = useTheme()
+  const [savedChats, setSavedChats] = useState<SavedChat[]>([])
+  const [currentChatId, setCurrentChatId] = useState<string | null>(null)
 
   useEffect(() => {
     setMounted(true)
+    fetchSavedChats()
   }, [])
+
+  const fetchSavedChats = async () => {
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ action: 'getSavedChats' }),
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setSavedChats(data.chats)
+      }
+    } catch (error) {
+      console.error('Error fetching saved chats:', error)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -55,56 +196,154 @@ export default function ChatInterface() {
     }
   }
 
+  const saveChat = async () => {
+    if (messages.length === 0) return
+
+    const chatId = currentChatId || Date.now().toString()
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ action: 'save', chatId, messages }),
+      })
+
+      if (response.ok) {
+        if (!currentChatId) {
+          setSavedChats((prev) => [...prev, { id: chatId, name: `Chat ${prev.length + 1}` }])
+        }
+        setCurrentChatId(chatId)
+      }
+    } catch (error) {
+      console.error('Error saving chat:', error)
+    }
+  }
+
+  const loadChat = async (chatId: string) => {
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ action: 'load', chatId }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setMessages(data.messages)
+        setCurrentChatId(chatId)
+      }
+    } catch (error) {
+      console.error('Error loading chat:', error)
+    }
+  }
+
+  const deleteChat = async (chatId: string) => {
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ action: 'delete', chatId }),
+      })
+
+      if (response.ok) {
+        setSavedChats((prev) => prev.filter((chat) => chat.id !== chatId))
+        if (currentChatId === chatId) {
+          setMessages([])
+          setCurrentChatId(null)
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting chat:', error)
+    }
+  }
+
   if (!mounted) return null
 
   return (
-    <div className="container mx-auto p-4">
-      <div className="w-full max-w-2xl mx-auto bg-card text-card-foreground rounded-lg shadow-md">
-        <div className="flex flex-row items-center justify-between p-4 border-b">
-          <h1 className="text-xl font-bold">Business Model Canvas Chatbot</h1>
+    <div className="flex h-screen bg-gray-100 dark:bg-gray-900">
+      {/* Sidebar */}
+      <div className="w-64 bg-white dark:bg-gray-800 p-4 overflow-y-auto">
+        <h2 className="text-lg font-semibold mb-4 text-gray-800 dark:text-white">Saved Chats</h2>
+        {savedChats.map((chat) => (
+          <div key={chat.id} className="flex items-center justify-between mb-2">
+            <button
+              onClick={() => loadChat(chat.id)}
+              className={`text-left ${
+                currentChatId === chat.id ? 'font-bold' : ''
+              } text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white`}
+            >
+              {chat.name}
+            </button>
+            <button onClick={() => deleteChat(chat.id)} className="text-red-500 hover:text-red-700">
+              <Trash2 size={16} />
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {/* Main Chat Area */}
+      <div className="flex-1 flex flex-col">
+        {/* Header */}
+        <header className="bg-white dark:bg-gray-800 shadow p-4 flex justify-between items-center">
+          <h1 className="text-xl font-bold text-gray-800 dark:text-white">Business Model Canvas Chatbot</h1>
           <button
-            className="p-2 rounded-full bg-secondary text-secondary-foreground"
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            className="p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white"
           >
             {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-            <span className="sr-only">Toggle theme</span>
           </button>
-        </div>
-        <div className="p-4 space-y-4 h-[60vh] overflow-y-auto">
+        </header>
+
+        {/* Chat Messages */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {messages.map((message, index) => (
             <div
               key={index}
-              className={`p-2 rounded-lg ${
+              className={`p-3 rounded-lg ${
                 message.role === 'user'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-secondary text-secondary-foreground'
-              }`}
+                  ? 'bg-blue-100 dark:bg-blue-900 ml-auto'
+                  : 'bg-gray-100 dark:bg-gray-700'
+              } max-w-3/4`}
             >
               <p className="font-semibold">{message.role === 'user' ? 'You:' : 'AI:'}</p>
               <p>{message.content}</p>
             </div>
           ))}
           {isLoading && (
-            <div className="p-2 rounded-lg bg-secondary text-secondary-foreground">
+            <div className="p-3 rounded-lg bg-gray-100 dark:bg-gray-700">
               <p className="font-semibold">AI is thinking...</p>
             </div>
           )}
         </div>
-        <div className="p-4 border-t">
+
+        {/* Input Area */}
+        <div className="bg-white dark:bg-gray-800 p-4">
           <form onSubmit={handleSubmit} className="flex space-x-2">
             <input
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Type your message..."
-              className="flex-grow p-2 border rounded-md bg-background text-foreground"
+              className="flex-1 p-2 border rounded-md bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white"
             />
             <button
               type="submit"
               disabled={isLoading}
-              className="px-4 py-2 bg-primary text-primary-foreground rounded-md disabled:opacity-50"
+              className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50"
             >
               Send
+            </button>
+            <button
+              type="button"
+              onClick={saveChat}
+              className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600"
+            >
+              <Save className="h-5 w-5" />
             </button>
           </form>
         </div>

@@ -1,49 +1,111 @@
-import { promises as fs } from 'fs';
-import path from 'path';
+// import { promises as fs } from 'fs';
+// import path from 'path';
+// import { NextResponse } from 'next/server';
+// import OpenAI from 'openai';
+
+// const openai = new OpenAI({
+//   apiKey: process.env.OPENAI_API_KEY,
+// });
+
+// async function readTextFiles(fileNames: string[]): Promise<string> {
+//   const fileContents = await Promise.all(
+//     fileNames.map(async (fileName) => {
+//       const filePath = path.join(process.cwd(), 'prompts', fileName);
+//       return await fs.readFile(filePath, 'utf-8');
+//     })
+//   );
+//   return fileContents.join('\n\n');
+// }
+
+// export async function POST(req: Request) {
+//   try {
+//     const { messages } = await req.json();
+
+//     const additionalPrompts1 = await readTextFiles(['graph_customer_v1.1.txt']);
+
+//     const additionalPrompts2 = await readTextFiles(['prompt_customer_v1.2.txt']);
+
+//     const systemPrompt = `
+// YOUR JOB IS TO STRICTLY CREATE A BUINESS MODEL CANVAS
+// Strictly follow the rules:
+// Step 1) Read the prompt text file (.txt) file ${additionalPrompts2} and make sure that you remember these instructions throughly during the entirity of your interactions with the user.
+
+// The next step is something you should ask the user after you have helped them with what they ask you. For example, If you have provided them with the service they asked you to do, you can ask them something along the lines "Would you like to visualise this?".
+
+// Step 2) Read the graph text (.txt) file ${additionalPrompts1} for the python code for visualising/plotting. Furthermore, look through other knowledge file if there is something relevant for the python code.
+
+// `;
+
+//     const response = await openai.chat.completions.create({
+//       model: "gpt-4o-mini",
+//       messages: [
+//         { role: "system", content: systemPrompt },
+//         ...messages,
+//       ],
+//       temperature: 0.7,
+//       // max_tokens: 65000,
+//       // max_completion_tokens: 65000,
+//     });
+
+//     return NextResponse.json(response.choices[0].message);
+//   } catch (error) {
+//     console.error('Error:', error);
+//     return NextResponse.json({ error: 'An error occurred while processing your request.' }, { status: 500 });
+//   }
+// }
+
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
+import { kv } from '@vercel/kv';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-async function readTextFiles(fileNames: string[]): Promise<string> {
-  const fileContents = await Promise.all(
-    fileNames.map(async (fileName) => {
-      const filePath = path.join(process.cwd(), 'prompts', fileName);
-      return await fs.readFile(filePath, 'utf-8');
-    })
-  );
-  return fileContents.join('\n\n');
-}
+const systemPrompt = `
+You are an AI assistant specialized in creating business model canvases for lean startup businesses. 
+Your task is to help entrepreneurs generate a comprehensive business model canvas based on their input. 
+Please ask questions to gather information about the following components of the business model canvas:
+
+1. Customer Segments
+2. Value Propositions
+3. Channels
+4. Customer Relationships
+5. Revenue Streams
+6. Key Resources
+7. Key Activities
+8. Key Partnerships
+9. Cost Structure
+
+After gathering the necessary information, generate a detailed business model canvas in a structured format.
+`;
 
 export async function POST(req: Request) {
   try {
-    const { messages } = await req.json();
+    const { messages, action, chatId } = await req.json();
 
-    const additionalPrompts1 = await readTextFiles(['graph_customer_v1.1.txt']);
+    if (action === 'save') {
+      await kv.set(`chat:${chatId}`, JSON.stringify(messages));
+      return NextResponse.json({ success: true, message: 'Chat saved successfully' });
+    }
 
-    const additionalPrompts2 = await readTextFiles(['prompt_customer_v1.2.txt']);
-
-    const systemPrompt = `
-YOUR JOB IS TO STRICTLY CREATE A BUINESS MODEL CANVAS
-Strictly follow the rules:
-Step 1) Read the prompt text file (.txt) file ${additionalPrompts2} and make sure that you remember these instructions throughly during the entirity of your interactions with the user.
-
-The next step is something you should ask the user after you have helped them with what they ask you. For example, If you have provided them with the service they asked you to do, you can ask them something along the lines "Would you like to visualise this?".
-
-Step 2) Read the graph text (.txt) file ${additionalPrompts1} for the python code for visualising/plotting. Furthermore, look through other knowledge file if there is something relevant for the python code.
-
-`;
+    if (action === 'load') {
+      const savedChat = await kv.get(`chat:${chatId}`);
+      if (savedChat) {
+        return NextResponse.json({ success: true, messages: JSON.parse(savedChat as string) });
+      } else {
+        return NextResponse.json({ success: false, message: 'Chat not found' }, { status: 404 });
+      }
+    }
 
     const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-4",
       messages: [
         { role: "system", content: systemPrompt },
         ...messages,
       ],
       temperature: 0.7,
-      max_tokens: 16000,
+      max_tokens: 1000,
     });
 
     return NextResponse.json(response.choices[0].message);
