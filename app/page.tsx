@@ -117,7 +117,7 @@
 
 import { useState, useEffect } from 'react'
 import { useTheme } from 'next-themes'
-import { Moon, Sun, MessageSquare, Save, Trash2 } from 'lucide-react'
+import { Moon, Sun, Save, Trash2 } from 'lucide-react'
 
 type Message = {
   role: 'user' | 'assistant'
