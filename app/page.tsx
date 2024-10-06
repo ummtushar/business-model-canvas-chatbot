@@ -168,43 +168,44 @@ export default function ChatInterface() {
 };
 
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim()) return;
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  if (!input.trim()) return;
 
-    const userMessage: Message = { role: 'user', content: input };
-    setMessages((prev) => [...prev, userMessage]);
-    setInput('');
-    setIsLoading(true);
-    setUnsavedChanges(true); // Mark unsaved changes
+  const userMessage: Message = { role: 'user', content: input };
+  setMessages((prev) => [...prev, userMessage]);
+  setInput('');
+  setIsLoading(true);
+  setUnsavedChanges(true); // Mark unsaved changes
 
-    try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ messages: [...messages, userMessage] }),
-      });
+  try {
+    const response = await fetch('/api/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ messages: [...messages, userMessage] }),
+    });
 
-      if (response.ok) {
-        const data = await response.json();
-        setMessages((prev) => [...prev, { role: 'assistant', content: data.content }]);
-      } else {
-        setMessages((prev) => [
-          ...prev,
-          { role: 'assistant', content: 'An error occurred. Please try again.' },
-        ]);
-      }
-    } catch (error) {
+    if (response.ok) {
+      const data = await response.json();
+      setMessages((prev) => [...prev, { role: 'assistant', content: data.content }]);
+    } else {
       setMessages((prev) => [
         ...prev,
         { role: 'assistant', content: 'An error occurred. Please try again.' },
       ]);
-    } finally {
-      setIsLoading(false);
     }
-  };
+  } catch {
+    setMessages((prev) => [
+      ...prev,
+      { role: 'assistant', content: 'An error occurred. Please try again.' },
+    ]);
+  } finally {
+    setIsLoading(false);
+  }
+};
+
 
   const saveChat = async () => {
     if (messages.length === 0) return;
