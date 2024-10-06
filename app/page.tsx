@@ -113,62 +113,70 @@
 //   )
 // }
 
-'use client'
+'use client';
 
-import { useState, useEffect } from 'react'
-import { useTheme } from 'next-themes'
-import { Moon, Sun, Save, Trash2 } from 'lucide-react'
+import { useState, useEffect } from 'react';
+import { useTheme } from 'next-themes';
+import { Moon, Sun, Save, Trash2 } from 'lucide-react';
 
 type Message = {
-  role: 'user' | 'assistant'
-  content: string
-}
+  role: 'user' | 'assistant';
+  content: string;
+};
 
 type SavedChat = {
-  id: string
-  name: string
-}
+  id: string;
+  name: string;
+};
 
 export default function ChatInterface() {
-  const [messages, setMessages] = useState<Message[]>([])
-  const [input, setInput] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-  const [mounted, setMounted] = useState(false)
-  const { theme, setTheme } = useTheme()
-  const [savedChats, setSavedChats] = useState<SavedChat[]>([])
-  const [currentChatId, setCurrentChatId] = useState<string | null>(null)
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const { theme, setTheme } = useTheme();
+  const [savedChats, setSavedChats] = useState<SavedChat[]>([]);
+  const [currentChatId, setCurrentChatId] = useState<string | null>(null);
+  const [unsavedChanges, setUnsavedChanges] = useState(false); // Track unsaved changes
 
   useEffect(() => {
-    setMounted(true)
-    fetchSavedChats()
-  }, [])
+    setMounted(true);
+    fetchSavedChats();
+  }, []);
 
   const fetchSavedChats = async () => {
-    try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ action: 'getSavedChats' }),
-      })
-      if (response.ok) {
-        const data = await response.json()
-        setSavedChats(data.chats)
-      }
-    } catch (error) {
-      console.error('Error fetching saved chats:', error)
+  try {
+    const response = await fetch('/api/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ action: 'getSavedChats' }),
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      setSavedChats(data.chats || []);  // Load saved chats or empty array if none exist
+    } else {
+      console.error('Error fetching saved chats:', await response.text());
+      setSavedChats([]); // Default to empty array in case of an error
     }
+  } catch (error) {
+    console.error('Error fetching saved chats:', error);
+    setSavedChats([]); // Default to empty array in case of an error
   }
+};
+
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!input.trim()) return
+    e.preventDefault();
+    if (!input.trim()) return;
 
-    const userMessage: Message = { role: 'user', content: input }
-    setMessages((prev) => [...prev, userMessage])
-    setInput('')
-    setIsLoading(true)
+    const userMessage: Message = { role: 'user', content: input };
+    setMessages((prev) => [...prev, userMessage]);
+    setInput('');
+    setIsLoading(true);
+    setUnsavedChanges(true); // Mark unsaved changes
 
     try {
       const response = await fetch('/api/chat', {
@@ -177,68 +185,89 @@ export default function ChatInterface() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ messages: [...messages, userMessage] }),
-      })
+      });
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch response')
+      if (response.ok) {
+        const data = await response.json();
+        setMessages((prev) => [...prev, { role: 'assistant', content: data.content }]);
+      } else {
+        setMessages((prev) => [
+          ...prev,
+          { role: 'assistant', content: 'An error occurred. Please try again.' },
+        ]);
       }
-
-      const data = await response.json()
-      setMessages((prev) => [...prev, { role: 'assistant', content: data.content }])
     } catch (error) {
-      console.error('Error:', error)
       setMessages((prev) => [
         ...prev,
         { role: 'assistant', content: 'An error occurred. Please try again.' },
-      ])
+      ]);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   const saveChat = async () => {
-    if (messages.length === 0) return
+    if (messages.length === 0) return;
 
-    const chatId = currentChatId || Date.now().toString()
+    const chatId = currentChatId || Date.now().toString(); // Generate new chatId if no currentChatId
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ action: 'save', chatId, messages }),
-      })
+        body: JSON.stringify({ action: 'save', chatId, messages }), // Send the messages to the API
+      });
 
       if (response.ok) {
+        // Add the chat to saved chats if it's new
         if (!currentChatId) {
-          setSavedChats((prev) => [...prev, { id: chatId, name: `Chat ${prev.length + 1}` }])
+          setSavedChats((prev) => [...prev, { id: chatId, name: `Chat ${prev.length + 1}` }]);
         }
-        setCurrentChatId(chatId)
+
+        // Clear the current messages to start a fresh chat
+        setMessages([]);
+        setInput('');
+        setCurrentChatId(null); // Reset the currentChatId to signal a new chat
+        setUnsavedChanges(false); // Reset unsaved changes
+      } else {
+        console.error('Error saving chat:', await response.text());
       }
     } catch (error) {
-      console.error('Error saving chat:', error)
+      console.error('Error saving chat:', error);
     }
-  }
+  };
 
   const loadChat = async (chatId: string) => {
+    if (unsavedChanges && !window.confirm('You have unsaved changes. Continue without saving?')) {
+      return;
+    }
+
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ action: 'load', chatId }),
-      })
+        body: JSON.stringify({ action: 'load', chatId }), // Ensure the correct payload is sent
+      });
 
       if (response.ok) {
-        const data = await response.json()
-        setMessages(data.messages)
-        setCurrentChatId(chatId)
+        const data = await response.json();
+        if (data.success) {
+          setMessages(data.messages); // Set the messages in the state
+          setCurrentChatId(chatId); // Set the currentChatId in the state
+          setUnsavedChanges(false); // Reset unsaved changes after loading
+        } else {
+          console.error('Failed to load chat:', data.message);
+        }
+      } else {
+        console.error('Error loading chat:', await response.text());
       }
     } catch (error) {
-      console.error('Error loading chat:', error)
+      console.error('Error loading chat:', error);
     }
-  }
+  };
 
   const deleteChat = async (chatId: string) => {
     try {
@@ -248,21 +277,24 @@ export default function ChatInterface() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ action: 'delete', chatId }),
-      })
+      });
 
       if (response.ok) {
-        setSavedChats((prev) => prev.filter((chat) => chat.id !== chatId))
+        setSavedChats((prev) => prev.filter((chat) => chat.id !== chatId));
         if (currentChatId === chatId) {
-          setMessages([])
-          setCurrentChatId(null)
+          setMessages([]);
+          setCurrentChatId(null);
+          setUnsavedChanges(false); // Reset unsaved changes on delete
         }
+      } else {
+        console.error('Error deleting chat:', await response.text());
       }
     } catch (error) {
-      console.error('Error deleting chat:', error)
+      console.error('Error deleting chat:', error);
     }
-  }
+  };
 
-  if (!mounted) return null
+  if (!mounted) return null;
 
   return (
     <div className="flex h-screen bg-gray-100 dark:bg-gray-900">
@@ -305,9 +337,7 @@ export default function ChatInterface() {
             <div
               key={index}
               className={`p-3 rounded-lg ${
-                message.role === 'user'
-                  ? 'bg-blue-100 dark:bg-blue-900 ml-auto'
-                  : 'bg-gray-100 dark:bg-gray-700'
+                message.role === 'user' ? 'bg-blue-100 dark:bg-blue-900 ml-auto' : 'bg-gray-100 dark:bg-gray-700'
               } max-w-3/4`}
             >
               <p className="font-semibold">{message.role === 'user' ? 'You:' : 'AI:'}</p>
@@ -349,5 +379,5 @@ export default function ChatInterface() {
         </div>
       </div>
     </div>
-  )
+  );
 }
